@@ -5,6 +5,7 @@ Checkout process utilities.
 from django.contrib.auth.models import SiteProfileNotAvailable
 from django.utils.translation import ugettext as _
 from django.template.loader import get_template, TemplateDoesNotExist
+from django.core.urlresolvers import get_callable
 
 from mezzanine.conf import settings
 from mezzanine.utils.email import send_mail_template
@@ -73,7 +74,8 @@ def initial_order_data(request):
     - last order made by the user, via user ID or cookie
     - matching fields on an authenticated user and profile object
     """
-    from cartridge.shop.forms import OrderForm
+    form_class = get_callable(settings.SHOP_CHECKOUT_FORM_CLASS)
+
     if request.method == "POST":
         return dict(request.POST.items())
     if "order" in request.session:
@@ -102,7 +104,7 @@ def initial_order_data(request):
             user_models.insert(0, request.user.get_profile())
         except SiteProfileNotAvailable:
             pass
-        for order_field in OrderForm._meta.fields:
+        for order_field in form_class._meta.fields:
             check_fields = [order_field]
             for prefix in ("billing_detail_", "shipping_detail_"):
                 if order_field.startswith(prefix):
@@ -121,8 +123,8 @@ def initial_order_data(request):
     # Set initial value for "same billing/shipping" based on
     # whether both sets of address fields are all equal.
     shipping = lambda f: "shipping_%s" % f[len("billing_"):]
-    if any([f for f in OrderForm._meta.fields if f.startswith("billing_") and
-        shipping(f) in OrderForm._meta.fields and
+    if any([f for f in form_class._meta.fields if f.startswith("billing_") and
+        shipping(f) in form_class._meta.fields and
         initial.get(f, "") != initial.get(shipping(f), "")]):
         initial["same_billing_shipping"] = False
     return initial
